@@ -1,0 +1,37 @@
+name: Sync Upstream
+
+# 自动把上游 eternityspring/shuohao-skills 同步到本仓库（独立镜像）。
+# 每天北京时间 02:00（UTC 18:00）运行，也可在 Actions 页面手动 Run workflow。
+# 用 rebase 而非 reset --hard：把本仓库唯一的本地 commit（此工作流）始终挂在
+# 上游最新 commit 之上，因此技能内容与上游逐字节一致，而同步机制自身不被覆盖。
+on:
+  schedule:
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync from upstream and keep local workflow
+        env:
+          UPSTREAM: https://github.com/eternityspring/shuohao-skills.git
+        run: |
+          git remote add upstream "$UPSTREAM"
+          git fetch upstream
+          git rebase upstream/main
+          git push --force origin main
