@@ -1,0 +1,42 @@
+name: Keepalive
+
+# 防止 GitHub 在「60 天无仓库活动」后自动禁用本仓库的定时工作流（含本工作流与 sync-upstream）。
+# 机制：每 14 天向 main 推一个「空 commit」(--allow-empty，不新增/修改任何文件)，
+#       制造一次真实 push → 仓库计时器永远重置，定时任务永不被禁用。
+#       仓库树与上游逐字节一致（空 commit 不改任何文件），技能内容仍 = 上游。
+# 双保险：用 API 把 sync-upstream.yml 重新启用，防止它被单独禁用后卡死。
+on:
+  schedule:
+    - cron: '23 4 1,15 * *'   # 每月 1 日、15 日 04:23 UTC（约每 14 天一次，远小于 60 天）
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Keepalive commit (empty, preserves file tree)
+        run: |
+          git commit --allow-empty -m "keepalive: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+          git push origin main
+
+      - name: Re-enable sync-upstream if disabled
+        run: |
+          curl -sS -X PUT \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/sync-upstream.yml/enable \
+            -w "\nenable sync-upstream: %{http_code}\n"
