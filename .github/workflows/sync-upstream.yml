@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   sync:
@@ -33,5 +34,13 @@ jobs:
         run: |
           git remote add upstream "$UPSTREAM"
           git fetch upstream
-          git rebase upstream/main
+          git rebase --empty=drop upstream/main
           git push --force origin main
+
+      - name: Re-enable keepalive if disabled
+        run: |
+          curl -sS -X PUT \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/keepalive.yml/enable \
+            -w "\nenable keepalive: %{http_code}\n"
